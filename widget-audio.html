@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Music Widget</title>
+  <style>
+    :root {
+      --card: #fbf8f3;
+      --ink: #2b2926;
+      --sub: #9a948b;
+      --line: #e6dfd4;
+      --accent: #e0848f;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      background: transparent;
+      font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+
+    body { padding: 6px; }
+
+    .widget {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      max-width: 320px;
+      padding: 10px 12px;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 4px 14px rgba(60, 40, 20, 0.06);
+      color: var(--ink);
+    }
+
+    /* 유튜브 플레이어: 작은 썸네일로만 보여요 */
+    .thumb {
+      flex: none;
+      width: 52px;
+      height: 52px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: var(--line);
+    }
+    .thumb iframe { width: 100%; height: 100%; border: 0; }
+
+    .info { flex: 1; min-width: 0; }
+
+    .label {
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .title {
+      margin-top: 2px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* 얇은 진행 바 */
+    .progress {
+      -webkit-appearance: none;
+      appearance: none;
+      display: block;
+      width: 100%;
+      height: 3px;
+      margin: 9px 0 0;
+      border-radius: 3px;
+      background: linear-gradient(to right, var(--accent) var(--p, 0%), var(--line) var(--p, 0%));
+      outline: none;
+      cursor: pointer;
+    }
+    .progress::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+    .progress::-moz-range-thumb {
+      width: 9px;
+      height: 9px;
+      border: 0;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .controls { flex: none; display: flex; align-items: center; gap: 2px; }
+
+    .controls button {
+      display: grid;
+      place-items: center;
+      width: 26px;
+      height: 26px;
+      padding: 0;
+      border: 0;
+      border-radius: 50%;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .controls button:hover { background: #efe8dc; }
+    .controls button:focus-visible { outline: 2px solid var(--accent); }
+    .controls svg { width: 14px; height: 14px; fill: currentColor; }
+
+    #play {
+      width: 34px;
+      height: 34px;
+      background: var(--ink);
+      color: #fff;
+    }
+    #play:hover { background: #4a4640; }
+    #play svg { width: 15px; height: 15px; }
+  </style>
+</head>
+<body>
+
+  <div class="widget">
+    <div class="thumb"><div id="yt"></div></div>
+
+    <div class="info">
+      <div class="label">Now Playing</div>
+      <div class="title" id="title">불러오는 중...</div>
+      <input class="progress" id="progress" type="range" min="0" max="100" value="0" aria-label="재생 위치">
+    </div>
+
+    <div class="controls">
+      <button id="prev" aria-label="이전 곡">
+        <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zM9.5 12 18 6v12z"/></svg>
+      </button>
+      <button id="play" aria-label="재생">
+        <svg viewBox="0 0 24 24" id="playIcon"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button id="next" aria-label="다음 곡">
+        <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18V6l8.5 6z"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script>
+    // 플레이리스트 ID (list= 뒤에서 & 앞까지의 값)
+    const PLAYLIST_ID = "PLHyOfd7HexVnX2dNXB23E4Wa829I0IJ-5";
+
+    const PLAY_PATH = "M8 5v14l11-7z";
+    const PAUSE_PATH = "M7 5h4v14H7zM13 5h4v14h-4z";
+
+    let player;
+    let timer;
+
+    const $play = document.getElementById("play");
+    const $icon = document.querySelector("#playIcon path");
+    const $title = document.getElementById("title");
+    const $progress = document.getElementById("progress");
+
+    function setProgress(value) {
+      $progress.value = value;
+      $progress.style.setProperty("--p", value + "%");
+    }
+
+    function onYouTubeIframeAPIReady() {
+      player = new YT.Player("yt", {
+        width: "52",
+        height: "52",
+        playerVars: {
+          listType: "playlist",
+          list: PLAYLIST_ID,
+          controls: 0,
+          loop: 1,
+          playsinline: 1
+        },
+        events: {
+          onReady: () => player.setVolume(70),
+          onStateChange: onStateChange
+        }
+      });
+    }
+
+    function onStateChange(e) {
+      const playing = e.data === YT.PlayerState.PLAYING;
+      $icon.setAttribute("d", playing ? PAUSE_PATH : PLAY_PATH);
+      $play.setAttribute("aria-label", playing ? "일시정지" : "재생");
+
+      const data = player.getVideoData();
+      if (data && data.title) $title.textContent = data.title;
+
+      clearInterval(timer);
+      if (playing) {
+        timer = setInterval(() => {
+          const d = player.getDuration();
+          if (d) setProgress((player.getCurrentTime() / d) * 100);
+        }, 500);
+      }
+    }
+
+    $play.onclick = () => {
+      const s = player.getPlayerState();
+      s === YT.PlayerState.PLAYING ? player.pauseVideo() : player.playVideo();
+    };
+    document.getElementById("prev").onclick = () => player.previousVideo();
+    document.getElementById("next").onclick = () => player.nextVideo();
+
+    $progress.oninput = () => {
+      setProgress($progress.value);
+      player.seekTo((player.getDuration() * $progress.value) / 100, true);
+    };
+  </script>
+
+</body>
+</html>
